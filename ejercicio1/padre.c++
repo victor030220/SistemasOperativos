@@ -64,107 +64,85 @@ int main(  )
     memoria = obtenerPuntMemoria( (char*)NOMBRE_MEMORIA, CANT_ELEMENTOS);
     fin = obtenerBand();
 
-    procesos[0] = fork();//creo el proceso de suma
+    procesos[0] = fork();//creo el proceso de suma en pos inpares
     if( procesos[0] == 0 ) {
-        int sumIndex = 0;
+        int sumIndex = 1;
+        int proximo = 2;
         while( ! *fin )
         {
-            if( sumIndex % 2 != 0 ){ //es posicion inpar
-                if( sumIndex != CANT_ELEMENTOS - 1 /*&& memoria[sumIndex] <= __INT_MAX__*/){ //si no estoy en el borde
-                    if(memoria[sumIndex] + memoria[sumIndex + 1] >= __INT_MAX__ )
-                        memoria[sumIndex] = 0;
-                         
-                    sem_wait( semaforos[1] );
-                    sem_wait( semaforos[2] );
-                    sem_wait( semaforos[3] );
-                    memoria[sumIndex] += memoria[sumIndex + 1];
-                    sem_post( semaforos[0] );
-                    sem_post( semaforos[1] );
-                    sem_post( semaforos[2] );
-                    sem_post( semaforos[3] );
-                }
-            }
-            if(sumIndex == CANT_ELEMENTOS - 1)//Vuelvo al inicio del vector o sigo
-                sumIndex = 0;
-            else
-                sumIndex ++;
+            sem_wait( semaforos[1] );
+            sem_wait( semaforos[2] );
+            sem_wait( semaforos[3] );
+            memoria[sumIndex] = ( memoria[sumIndex] + memoria[proximo] > __INT_MAX__ ? rand() : memoria[sumIndex] + memoria[proximo] );
+            sem_post( semaforos[0] );
+            sem_post( semaforos[1] );
+            sem_post( semaforos[2] );
+            sem_post( semaforos[3] );
+            proximo = (proximo + 2) % CANT_ELEMENTOS ;
+            sumIndex = (sumIndex + 2) % CANT_ELEMENTOS;
         }
     }
     else 
         if( procesos[0] > 0 ){
-            procesos[1] = fork();//creo el proceso resta
+            procesos[1] = fork();//creo el proceso resta pos pares
             if ( procesos[1] == 0 )
             {
                 int restaIndex = 0;
+                int anterior =  CANT_ELEMENTOS - 1;
                     while( ! *fin ){
-                        if( restaIndex % 2 ==0 ){ //es pos par
-                            if( restaIndex - 1 >= 0 && memoria[restaIndex] >= _SC_INT_MIN ){ //existe un anterior
+                        
+                        sem_wait( semaforos[0] );
+                        sem_wait( semaforos[2] );
+                        sem_wait( semaforos[3] );
+                        memoria[restaIndex] = ( memoria[restaIndex] - memoria[anterior] < _SC_INT_MIN ? rand() : memoria[restaIndex] - memoria[anterior] );
+                        sem_post( semaforos[0] );
+                        sem_post( semaforos[1] );
+                        sem_post( semaforos[2] );
+                        sem_post( semaforos[3] );
+                        anterior = (anterior + 2) % CANT_ELEMENTOS;
+                        restaIndex = ( restaIndex + 2 ) % CANT_ELEMENTOS;
+                    }
+            }
+            else
+            if( procesos[0] > 0 && procesos[1] > 0){
+                procesos[2] = fork(); //creo el proceso producto en pos pares
+                if( procesos[2] == 0 ){
+                    int proIndex = 0;
+                    int proximo = CANT_ELEMENTOS - 1;
+                        while( ! *fin )
+                        {
                                 sem_wait( semaforos[0] );
-                                sem_wait( semaforos[2] );
+                                sem_wait( semaforos[1] );
                                 sem_wait( semaforos[3] );
-                                memoria[restaIndex] -= memoria[restaIndex - 1];
+                                memoria[proIndex] = ( memoria[proIndex] * ( memoria[proximo] * 0.1 ) > __INT_MAX__ ? rand() : memoria[proIndex] * ( memoria[proximo] * 0.1 ) );
                                 sem_post( semaforos[0] );
                                 sem_post( semaforos[1] );
                                 sem_post( semaforos[2] );
                                 sem_post( semaforos[3] );
-                            }
-                        }
-                        if( restaIndex == CANT_ELEMENTOS - 1 )
-                            restaIndex = 0;
-                        else
-                            restaIndex ++;
-                    }
-            }
-            else
-                if( procesos[0] > 0 && procesos[1] > 0){
-                    procesos[2] = fork(); //creo el proceso dividir
-                    if( procesos[2] == 0 ){
-                        int divIndex = 0;
-                        while( ! *fin )
-                        {
-                            if( divIndex % 2 == 0 )//es pos par
-                            {
-                                if( divIndex - 1 >= 0 && memoria[divIndex -1 ] != 0 && memoria[divIndex] >= _SC_INT_MIN ){ //ahi un anterior
-                                    sem_wait( semaforos[0] );
-                                    sem_wait( semaforos[1] );
-                                    sem_wait( semaforos[3] );
-                                    memoria[divIndex] /=  memoria[divIndex -1 ];
-                                    sem_post( semaforos[0] );
-                                    sem_post( semaforos[1] );
-                                    sem_post( semaforos[2] );
-                                    sem_post( semaforos[3] );
-                                }
-                            }
-                            if( divIndex == CANT_ELEMENTOS - 1 )
-                                divIndex = 0;
-                            else
-                                divIndex ++;
+                            proximo = (proximo +2 ) % CANT_ELEMENTOS;
+                            proIndex = (proIndex + 2 ) %CANT_ELEMENTOS;
                         }
                     }
-                        else
-                            if(procesos[0] > 0 && procesos[1] > 0 && procesos[2] > 0  ){
-                                procesos[3] = fork(); //creo el proceso hijo producto
+                    else
+                    if(procesos[0] > 0 && procesos[1] > 0 && procesos[2] > 0  ){
+                                procesos[3] = fork(); //creo el proceso dividir en pos inpares
                                 if( procesos[3] == 0 ){
-                                    int proIndex = 0;
+                                    int divIndex = 1;
+                                    int anterior = 2;
                                     while( ! *fin )
-                                    {
-                                        if( proIndex % 2 == 0 ){ //es par
-                                            if( proIndex + 1 < CANT_ELEMENTOS && memoria[proIndex] <= __INT_MAX__ ){ //el siguiente esta en el vector
-                                                sem_wait( semaforos[0] );
-                                                sem_wait( semaforos[1] );
-                                                sem_wait( semaforos[2] );
-                                                memoria[proIndex] = memoria[proIndex] * ( memoria[proIndex + 1] * 0.1 );
-                                                sem_post( semaforos[0] );
-                                                sem_post( semaforos[1] );
-                                                sem_post( semaforos[2] );
-                                                sem_post( semaforos[3] );
-                                            }
+                                    {                                        
+                                        if( memoria[anterior] != 0 ){
+                                            sem_wait( semaforos[0] );
+                                            sem_wait( semaforos[1] );
+                                            sem_wait( semaforos[2] );
+                                            memoria[divIndex] = ( memoria[divIndex] / memoria[anterior] < _SC_INT_MIN ? rand() : memoria[divIndex] / memoria[anterior] );
+                                            sem_post( semaforos[0] );
+                                            sem_post( semaforos[1] );
+                                            sem_post( semaforos[2] );
+                                            sem_post( semaforos[3] );
+                                            anterior = ( anterior + 2) % CANT_ELEMENTOS;
+                                            divIndex = ( divIndex + 2 ) % CANT_ELEMENTOS;
                                         }
-                                        if( proIndex == CANT_ELEMENTOS - 1 )
-                                            proIndex = 0;
-                                        else
-                                            proIndex ++;
-                                        
                                     }
                                 }
                                 else{

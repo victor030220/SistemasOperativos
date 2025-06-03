@@ -11,9 +11,10 @@
 
 using namespace std;
 
-#define NOMBRE_PROCESOS "hSuma", "hResta", "hProducto", "hDividir"
+#define NOM_SEMAFOROS "hSuma", "hResta", "hProducto", "hDividir"
 #define CANT_ELEMENTOS 10
 #define NOMBRE_MEMORIA "memoriaDatos"
+#define NOMBRE_BANDERA "bandFin"
 
 int* obtenerPuntMemoria ( char * nomMemoria, int cantElem ){
     int *mem;
@@ -25,7 +26,7 @@ int* obtenerPuntMemoria ( char * nomMemoria, int cantElem ){
     return mem;
 }
  bool* obtenerBand(){
-    int idBand =  shm_open( "bandFin", O_CREAT | O_RDWR, 0600 );
+    int idBand =  shm_open( NOMBRE_BANDERA, O_CREAT | O_RDWR, 0600 );
     ftruncate( idBand, sizeof(bool));
     bool *band = (bool*) mmap( NULL, sizeof(bool), PROT_READ | PROT_WRITE, MAP_SHARED, idBand, 0);
     close(idBand);
@@ -49,21 +50,17 @@ void verMemoria( int* array ){
 
 int main(  )
 {
-    vector<string> procHijos = {NOMBRE_PROCESOS};
-    sem_t* semaforos[ procHijos.size() ];
-    pid_t procesos[ procHijos.size() ]; 
+    vector<string> nom_semaforos = {NOM_SEMAFOROS};
+    sem_t* semaforos[ nom_semaforos.size() ];
+    pid_t procesos[ nom_semaforos.size() ]; 
     int *memoria;
     bool *fin;
     //Crear los semaforos
-    sem_unlink( procHijos[0].c_str() );
-    sem_unlink( procHijos[1].c_str() );
-    sem_unlink( procHijos[2].c_str() );
-    sem_unlink( procHijos[3].c_str() );
-    crearSemaforos( semaforos, procHijos );//lo creamos de tla forma que ejecute primero el del hijo
+    crearSemaforos( semaforos, nom_semaforos );//lo creamos de tal forma que ejecute primero el del hijo
 
     memoria = obtenerPuntMemoria( (char*)NOMBRE_MEMORIA, CANT_ELEMENTOS);
     fin = obtenerBand();
-
+    //Cada proceso ejecuta hasta que el padre le diga fin, el padre aguarda a que el usuario le de la orden de fins
     procesos[0] = fork();//creo el proceso de suma en pos inpares
     if( procesos[0] == 0 ) {
         int sumIndex = 1;
@@ -111,14 +108,14 @@ int main(  )
                     int proximo = CANT_ELEMENTOS - 1;
                         while( ! *fin )
                         {
-                                sem_wait( semaforos[0] );
-                                sem_wait( semaforos[1] );
-                                sem_wait( semaforos[3] );
-                                memoria[proIndex] = ( memoria[proIndex] * ( memoria[proximo] * 0.1 ) > __INT_MAX__ ? rand() : memoria[proIndex] * ( memoria[proximo] * 0.1 ) );
-                                sem_post( semaforos[0] );
-                                sem_post( semaforos[1] );
-                                sem_post( semaforos[2] );
-                                sem_post( semaforos[3] );
+                            sem_wait( semaforos[0] );
+                            sem_wait( semaforos[1] );
+                            sem_wait( semaforos[3] );
+                            memoria[proIndex] = ( memoria[proIndex] * ( memoria[proximo] * 0.1 ) > __INT_MAX__ ? rand() : memoria[proIndex] * ( memoria[proximo] * 0.1 ) );
+                            sem_post( semaforos[0] );
+                            sem_post( semaforos[1] );
+                            sem_post( semaforos[2] );
+                            sem_post( semaforos[3] );
                             proximo = (proximo +2 ) % CANT_ELEMENTOS;
                             proIndex = (proIndex + 2 ) %CANT_ELEMENTOS;
                         }
@@ -145,31 +142,33 @@ int main(  )
                                         }
                                     }
                                 }
-                                else{
-                                    cout<<"Este es el padre y debiera de mostrarse una vez"<<endl;
-                                }
                             }
                 }
         }
     
     if( procesos[0] > 0 && procesos[1] > 0 && procesos[2] > 0 && procesos[3] > 0){
-        cout<<"Se estan ejecutando los 4 procesos hijos, por favor presione una techa para continuar....."<<endl;
+        cout<<endl<<"Se estan ejecutando los 4 procesos hijos, por favor presione una tecla para continuar....."<<endl;
         string f;
-        cin>>f;
-        *fin = true;
-        waitpid( procesos[0], NULL, 0 );
-        waitpid( procesos[1], NULL, 0 );
-        waitpid( procesos[2], NULL, 0 );
-        waitpid( procesos[3], NULL, 0 );
-        sem_close( semaforos[0] );
-        sem_close( semaforos[1] );
-        sem_close( semaforos[2] );
-        sem_close( semaforos[3] );
+        cin>>f;//espera q que se ingrese algo por teclado
+        *fin = true;//Indicamos a todos los procesos que finalzen
+        for (size_t i = 0; i < nom_semaforos.size(); i++)
+        {
+            waitpid( procesos[i], NULL, 0 );//Los esperamos para que terminen de manera correcta
+        }
+        
+        for (size_t i = 0; i <nom_semaforos.size() ; i++)
+        {
+           sem_close( semaforos[i] );
+           sem_unlink( nom_semaforos[i].c_str() );
+        }
+        
         *fin = false; //la vuelvo a dejar en su valor inicial
         munmap( fin, sizeof(bool) );
+        shm_unlink(NOMBRE_BANDERA);
         cout<<"El padre libero todos los pids y semaforos, se muestra el vector final"<<endl;
         verMemoria( memoria );
         munmap( memoria, sizeof(int) * CANT_ELEMENTOS );
+        shm_unlink(NOMBRE_MEMORIA);
     }
     return 0;
 }

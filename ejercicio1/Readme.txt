@@ -1,0 +1,2 @@
+Para correrlo correctamente, se debe ejecutar el ejecutable "crear", este crea la memoria (inicializada) y la bandera de fin.
+Luego se puede ejecutar "padre", este crea los procesos hijo y semáforos, una vez finalizado limpia todo.
